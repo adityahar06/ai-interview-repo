@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-dark-500 text-white font-sans antialiased;
+    background: radial-gradient(ellipse at top left, #1a1b2e 0%, #0d1117 60%);
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4263eb;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #5c7cfa;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+
+  .glass-card-hover {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl hover:bg-white/10 hover:border-white/20 transition-all duration-300;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-600 to-accent-purple text-white font-semibold 
+           px-6 py-3 rounded-xl transition-all duration-300 
+           hover:shadow-lg hover:shadow-primary-500/30 hover:scale-105 
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-secondary {
+    @apply bg-white/10 backdrop-blur-sm border border-white/20 text-white font-semibold 
+           px-6 py-3 rounded-xl transition-all duration-300 
+           hover:bg-white/20 hover:border-white/30 hover:scale-105 
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply bg-gradient-to-r from-accent-rose to-red-700 text-white font-semibold 
+           px-6 py-3 rounded-xl transition-all duration-300 
+           hover:shadow-lg hover:shadow-rose-500/30 hover:scale-105 
+           active:scale-95;
+  }
+
+  .input-field {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white 
+           placeholder-gray-400 outline-none transition-all duration-300
+           focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:bg-white/10;
+  }
+
+  .label {
+    @apply text-gray-300 text-sm font-medium mb-2 block;
+  }
+
+  .section-title {
+    @apply text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 via-accent-purple to-accent-cyan bg-clip-text text-transparent;
+  }
+
+  .score-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .nav-link {
+    @apply text-gray-400 hover:text-white transition-colors duration-200 font-medium;
+  }
+
+  .ai-bubble {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 rounded-tl-sm border-l-4 border-l-primary-500;
+  }
+
+  .user-bubble {
+    @apply bg-gradient-to-r from-primary-600/30 to-accent-purple/30 border border-primary-500/30 
+           rounded-2xl rounded-tr-sm p-4;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(92, 124, 250, 0.4), 0 0 40px rgba(92, 124, 250, 0.2);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
+  }
+}
+
+/* Typing indicator animation */
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  background: #5c7cfa;
+  border-radius: 50%;
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* Particles background */
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(92, 124, 250, 0.2);
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); opacity: 0.3; }
+  50% { transform: translateY(-20px) scale(1.1); opacity: 0.7; }
+}
+
+/* Progress bar animation */
+.progress-bar-animated {
+  background: linear-gradient(90deg, #4c6ef5, #7c3aed, #06b6d4);
+  background-size: 200% 100%;
+  animation: progressShimmer 2s linear infinite;
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
