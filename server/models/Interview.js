@@ -18,6 +18,7 @@ const interviewSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
+    // enum is used for strict rules that this is only allowed i any lese i sbeing stored then mongod will give error
     enum: [
       'Frontend Developer',
       'Backend Developer',
@@ -62,6 +63,9 @@ const interviewSchema = new mongoose.Schema({
   },
   startedAt: { type: Date },
   completedAt: { type: Date },
+  // I enabled Mongoose's native timestamps to automatically track the createdAt and updatedAt 
+  // lifecycle of my documents. This completely removes the need to manually manage 
+  // date objects in my controllers, ensures my database has a reliable chronological audit trail, and makes it incredibly easy to sort data for the frontend dashboards
 }, { timestamps: true });
 
 module.exports = mongoose.model('Interview', interviewSchema);

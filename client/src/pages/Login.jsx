@@ -6,20 +6,30 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const Login = () => {
+  // using use state for form,show password,loading 
+  // An object initialized as { email: '', password: '' }. This acts as the single source of truth for what the user has typed into the input fields.
   const [form, setForm] = useState({ email: '', password: '' });
+  // A boolean (starting as false). It acts as a toggle switch to determine whether the password input field should mask the characters (***) or reveal them as plain text.
   const [showPassword, setShowPassword] = useState(false);
+  // A boolean (starting as false). It tracks whether the app is currently waiting for the server to respond to the login request. It prevents the user from clicking "Sign In" multiple times and triggering duplicate API calls.
   const [loading, setLoading] = useState(false);
+  //This custom hook pulls the login function from your global Authentication Context. Once the backend verifies the user's credentials, this function is used to save the user's token and details globally,
+  //  telling the rest of the app "This user is now logged in
   const { login } = useAuth();
+  // navigate is used to send the user to a different page 
   const navigate = useNavigate();
-
+  // ... form creates a copy of the existing form state so no data is lost.
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
+    // Stops the browser's default behavior of refreshing the entire page when a form is submitted.
     e.preventDefault();
+    // toast is used for pop form react-hot-toast
     if (!form.email || !form.password) {
       toast.error('Please fill in all fields');
       return;
     }
+    // it is used to lock the submit button so that i user press agan and agina it will not be submitted again
     setLoading(true);
     try {
       const res = await authAPI.login(form);

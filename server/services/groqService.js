@@ -1,43 +1,8 @@
-const { GoogleGenAI } = require('@google/genai');
+const Groq = require('groq-sdk');
 
-// ✅ New @google/genai SDK — uses v1 API endpoint
-const MODEL = 'gemini-2.0-flash';
-
-const getAI = () => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-/**
- * Call Gemini with automatic retry on rate-limit (429)
- */
-const callGemini = async (prompt, config = {}) => {
-  const ai = getAI();
-  const maxRetries = 3;
-  const delays = [2000, 5000, 10000]; // 2s, 5s, 10s
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model: MODEL,
-        contents: prompt,
-        config: {
-          temperature: config.temperature ?? 0.8,
-          topP: 0.95,
-          maxOutputTokens: config.maxOutputTokens ?? 2048,
-        },
-      });
-      return response.text.trim();
-    } catch (err) {
-      const isRateLimit = err.message?.includes('429') || err.message?.includes('quota');
-      const isRetryable = isRateLimit && attempt < maxRetries;
-
-      if (isRetryable) {
-        console.warn(`⏳ Gemini rate limit hit — retrying in ${delays[attempt] / 1000}s... (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(res => setTimeout(res, delays[attempt]));
-      } else {
-        throw err;
-      }
-    }
-  }
-};
+// Ensure you have GROQ_API_KEY set in your .env
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const MODEL = 'llama-3.1-8b-instant'; // Updated from deprecated llama3-8b-8192
 
 // ──────────────────────────────────────────────
 // Topic pools — ensures each question covers a DIFFERENT concept
@@ -122,58 +87,6 @@ const TOPIC_POOLS = {
   ],
 };
 
-/**
- * Generate UNIQUE interview questions, one per topic
- */
-const generateInterviewQuestions = async (role, difficulty, count) => {
-  const pool = TOPIC_POOLS[role] || TOPIC_POOLS['General Software Engineer'];
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  const selectedTopics = shuffled.slice(0, Math.min(count, shuffled.length));
-  const topicList = selectedTopics.map((t, i) => `${i + 1}. ${t}`).join('\n');
-
-  const prompt = `You are a senior interviewer at a top tech company. Conduct a ${difficulty}-level ${role} interview.
-
-Generate exactly ${count} questions — one specific question for each topic below. Each question MUST be different.
-
-Topics:
-${topicList}
-
-Rules:
-- ${difficulty === 'Easy' ? 'Test basic definitions and foundational understanding' : difficulty === 'Medium' ? 'Require practical experience and applied knowledge' : 'Require deep expertise, edge cases, and system thinking'}
-- Each question must be specific and concrete — not vague
-- Do NOT repeat or paraphrase similar questions
-- Sound like real FAANG interview questions
-
-Return ONLY a valid JSON array of exactly ${count} strings. Nothing else.
-["Question 1?", "Question 2?", ...]`;
-
-  try {
-    const text = await callGemini(prompt, { temperature: 0.9 });
-    const jsonMatch = text.match(/\[[\s\S]*?\]/);
-    if (!jsonMatch) throw new Error('No JSON array in response');
-
-    let questions = JSON.parse(jsonMatch[0]);
-    questions = questions
-      .map(q => (typeof q === 'string' ? q.trim() : ''))
-      .filter((q, i, arr) => q.length > 15 && arr.indexOf(q) === i);
-
-    if (questions.length < count) {
-      const extras = getFallbackQuestions(role);
-      questions = [...questions, ...extras].slice(0, count);
-    }
-
-    console.log(`✅ Generated ${questions.length} unique questions for [${role}] (${difficulty})`);
-    return questions.slice(0, count);
-  } catch (err) {
-    console.error('Gemini generateQuestions error:', err.message);
-    console.log('⚠️  Using smart fallback questions');
-    return getFallbackQuestions(role).slice(0, count);
-  }
-};
-
-/**
- * Comprehensive fallback questions — unique per role, randomly shuffled
- */
 const getFallbackQuestions = (role) => {
   const banks = {
     'Frontend Developer': [
@@ -267,15 +180,83 @@ const getFallbackQuestions = (role) => {
   return [...questions].sort(() => Math.random() - 0.5);
 };
 
-/**
- * Evaluate a candidate's answer with AI scoring
- */
+
+const generateInterviewQuestions = async (role, difficulty, count) => {
+  if (!process.env.GROQ_API_KEY) {
+      console.log('⚠️ GROQ_API_KEY missing, using fallback questions');
+      return getFallbackQuestions(role).slice(0, count);
+  }
+
+  const pool = TOPIC_POOLS[role] || TOPIC_POOLS['General Software Engineer'];
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const selectedTopics = shuffled.slice(0, Math.min(count, shuffled.length));
+  const topicList = selectedTopics.map((t, i) => `${i + 1}. ${t}`).join('\n');
+
+  const prompt = `You are a senior interviewer at a top tech company. Conduct a ${difficulty}-level ${role} interview.
+
+Generate exactly ${count} questions — one specific question for each topic below. Each question MUST be different.
+
+Topics:
+${topicList}
+
+Rules:
+- ${difficulty === 'Easy' ? 'Test basic definitions and foundational understanding' : difficulty === 'Medium' ? 'Require practical experience and applied knowledge' : 'Require deep expertise, edge cases, and system thinking'}
+- Each question must be specific and concrete — not vague
+- Do NOT repeat or paraphrase similar questions
+- Sound like real FAANG interview questions
+
+Return ONLY a valid JSON object with a single key "questions" containing an array of exactly ${count} strings. Nothing else.
+{"questions": ["Question 1?", "Question 2?", ...]} `;
+
+  try {
+    const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        model: MODEL,
+        temperature: 0.9,
+        response_format: { type: 'json_object' },
+    });
+    
+    let text = chatCompletion.choices[0]?.message?.content || "";
+    // Groq sometimes wraps JSON in markdown blocks, even when told not to.
+    text = text.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+    
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON object in response');
+
+    let parsed = JSON.parse(jsonMatch[0]);
+    let questions = parsed.questions || [];
+
+    questions = questions
+      .map(q => (typeof q === 'string' ? q.trim() : ''))
+      .filter((q, i, arr) => q.length > 15 && arr.indexOf(q) === i);
+
+    if (questions.length < count) {
+      const extras = getFallbackQuestions(role);
+      questions = [...questions, ...extras].slice(0, count);
+    }
+
+    console.log(`✅ Generated ${questions.length} unique questions for [${role}] (${difficulty}) via Groq`);
+    return questions.slice(0, count);
+  } catch (err) {
+    console.error('Groq generateQuestions error:', err.message);
+    console.log('⚠️  Using smart fallback questions');
+    return getFallbackQuestions(role).slice(0, count);
+  }
+};
+
 const evaluateAnswer = async (role, difficulty, question, answer) => {
   if (!answer || answer.trim().length < 5) {
     return {
       score: 0,
       feedback: 'No meaningful answer was provided. Always attempt an answer — partial answers earn partial credit!',
     };
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+      return {
+          score: 5,
+          feedback: 'Your answer has been recorded. (API key missing for full evaluation)',
+      };
   }
 
   const prompt = `You are a strict but fair senior ${role} interviewer.
@@ -291,11 +272,20 @@ Score 0-10:
 • 7-8: Good, minor gaps or imprecise wording
 • 9-10: Excellent, comprehensive, mentions edge cases
 
-Respond with ONLY this JSON (no markdown):
+Respond with ONLY this JSON (no markdown, no extra text):
 {"score": <integer 0-10>, "feedback": "<2-3 sentences: what was correct, what was missing, one concrete improvement tip>"}`;
 
   try {
-    const text = await callGemini(prompt, { temperature: 0.3, maxOutputTokens: 512 });
+    const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        model: MODEL,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+    });
+    
+    let text = chatCompletion.choices[0]?.message?.content || "";
+    text = text.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+
     const jsonMatch = text.match(/\{[\s\S]*?\}/);
     if (!jsonMatch) throw new Error('No JSON found');
 
@@ -305,7 +295,7 @@ Respond with ONLY this JSON (no markdown):
       feedback: evaluation.feedback || 'Answer evaluated.',
     };
   } catch (err) {
-    console.error('Gemini evaluateAnswer error:', err.message);
+    console.error('Groq evaluateAnswer error:', err.message);
     return {
       score: 5,
       feedback: 'Your answer has been recorded. For a higher score, include specific examples and cover edge cases.',
@@ -313,9 +303,7 @@ Respond with ONLY this JSON (no markdown):
   }
 };
 
-/**
- * Generate a full performance report after the interview
- */
+
 const generateReport = async (role, difficulty, questions) => {
   const qaText = questions
     .map((q, i) =>
@@ -324,6 +312,15 @@ const generateReport = async (role, difficulty, questions) => {
     .join('\n\n');
 
   const avgScore = questions.reduce((s, q) => s + (q.score || 0), 0) / questions.length;
+  
+  if (!process.env.GROQ_API_KEY) {
+      const level = avgScore >= 7 ? 'strong' : avgScore >= 5 ? 'moderate' : 'beginner-level';
+      return {
+        summary: `The candidate completed a ${difficulty} ${role} interview with an average score of ${avgScore.toFixed(1)}/10, showing ${level} knowledge overall. ${avgScore >= 7 ? 'They appear ready for further technical rounds.' : 'Additional preparation in core areas is recommended.'}`,
+        strengths: ['Attempted all questions', 'Engaged with technical topics', 'Demonstrated foundational understanding'],
+        improvements: ['Deepen knowledge of core ' + role + ' concepts', 'Practice explaining solutions clearly with examples', 'Study system design and edge cases'],
+      };
+  }
 
   const prompt = `You are a senior hiring manager reviewing a completed ${difficulty}-level ${role} interview.
 
@@ -340,13 +337,22 @@ Write a professional candidate assessment. Return ONLY this JSON (no markdown):
 }`;
 
   try {
-    const text = await callGemini(prompt, { temperature: 0.4, maxOutputTokens: 1024 });
+    const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        model: MODEL,
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+    });
+    
+    let text = chatCompletion.choices[0]?.message?.content || "";
+    text = text.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+    
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found');
 
     return JSON.parse(jsonMatch[0]);
   } catch (err) {
-    console.error('Gemini generateReport error:', err.message);
+    console.error('Groq generateReport error:', err.message);
     const level = avgScore >= 7 ? 'strong' : avgScore >= 5 ? 'moderate' : 'beginner-level';
     return {
       summary: `The candidate completed a ${difficulty} ${role} interview with an average score of ${avgScore.toFixed(1)}/10, showing ${level} knowledge overall. ${avgScore >= 7 ? 'They appear ready for further technical rounds.' : 'Additional preparation in core areas is recommended.'}`,

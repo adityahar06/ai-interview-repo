@@ -5,13 +5,17 @@ import useTimer from '../hooks/useTimer';
 import Navbar from '../components/layout/Navbar';
 import {
   Brain, Send, SkipForward, Clock, Loader2, MessageSquare,
-  ChevronRight, Mic, MicOff, AlertCircle, CheckCircle
+  ChevronRight, AlertCircle, CheckCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const InterviewSession = () => {
+  // it direclty Grabs the interview ID directly from the URL (e.g., /interview/12345 -> id is 12345).
   const { id } = useParams();
+  // Gives you the power to teleport the user to a different page later (like the results page).
   const navigate = useNavigate();
+  // To make the transition into the interview instant, I check useLocation to see if the previous page passed the interview data in memory. If it did, I render the first question instantly without hitting the database. 
+  // However, I also built a robust fallback: if the user refreshes the page and loses that memory state, the app reads the ID from the URL using useParams and fetches the data so the app doesn't crash.
   const location = useLocation();
 
   const [interview, setInterview] = useState(location.state?.interview || null);
@@ -23,21 +27,27 @@ const InterviewSession = () => {
   const [lastFeedback, setLastFeedback] = useState(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-
   const textareaRef = useRef(null);
-  const recognitionRef = useRef(null);
-
+ // When that clock hits exactly zero, it triggers handleTimerExpire.
   const handleTimerExpire = useCallback((elapsed) => {
+    // This is a crucial safety check. Imagine the timer hits 0.00 seconds at the exact same millisecond the user clicks the "Submit" button. 
+    // Without this check, the app would try to submit the answer twice, crashing the server. 
+    // This line says: "If the app is already in the middle of submitting, ignore the alarm
     if (!submitting) {
-      toast('⏰ Time up! Auto-submitting...', { icon: '⏱️' });
+      toast(' Time up! Auto-submitting...', { icon: '⏱️' });
       handleSubmitAnswer(true, elapsed);
     }
+    // If you didn't have [submitting] in the array, your memorized alarm function wouldn't know about the change. It would still think submitting is false. 
+    // If the timer hit zero a second later, it would bypass your if (!submitting) safety check and submit the answer a second time, 
+    // crashing the server
   }, [submitting]);
 
   const timer = useTimer(120, handleTimerExpire);
 
   useEffect(() => {
+    // The first useEffect acts as my component initialization and disaster recovery. It runs once on mount. 
+    // If the router state was lost—like if the user refreshed the page—it falls back to fetching the session data using the URL params so the app doesn't crash. 
+    // If the fetch fails, it safely redirects them.
     if (!interview) {
       interviewAPI.getById(id).then(res => {
         const iv = res.data.interview;
@@ -49,46 +59,16 @@ const InterviewSession = () => {
       }).catch(() => navigate('/dashboard'));
     }
     timer.start();
+    // The empty array at the very bottom means: "Run this code exactly one time, the very millisecond this page opens."
   }, []);
-
+// Unlike the first hook, this array has a variable inside it. This tells React: "Watch the currentQuestion variable. 
+// Every single time it changes to a new question, run this code again."
   useEffect(() => {
+    // .focus() physically forces the computer's typing cursor inside the text box.
+    // textareaRef.current points exactly to the HTML <textarea> (the answer box) on your screen.
     if (textareaRef.current) textareaRef.current.focus();
   }, [currentQuestion]);
 
-  // Speech Recognition
-  const toggleListening = () => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      toast.error('Speech recognition not supported in this browser');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(r => r[0].transcript)
-        .join('');
-      setAnswer(transcript);
-    };
-
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-    toast('🎙️ Listening... speak your answer', { duration: 2000 });
-  };
 
   const handleSubmitAnswer = async (skipped = false, elapsed = timer.elapsed) => {
     if (submitting || isCompleting) return;
@@ -269,24 +249,13 @@ const InterviewSession = () => {
               <div className="flex items-center gap-2 px-3 pt-3 pb-1">
                 <MessageSquare className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-400 text-sm font-medium">Your Answer</span>
-                <button
-                  onClick={toggleListening}
-                  className={`ml-auto p-1.5 rounded-lg transition-all ${
-                    isListening
-                      ? 'bg-red-500/20 text-red-400 animate-pulse'
-                      : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
-                  }`}
-                  title="Toggle voice input"
-                >
-                  {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
               </div>
               <textarea
                 ref={textareaRef}
                 id="answer-textarea"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Type your answer here... Be thorough and specific. You can also use the mic button for voice input."
+                placeholder="Type your answer here... Be thorough and specific."
                 className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 outline-none resize-none text-sm leading-relaxed"
                 rows={8}
                 onKeyDown={(e) => {

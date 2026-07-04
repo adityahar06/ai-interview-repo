@@ -5,11 +5,15 @@ const reportSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Interview',
     required: true,
+    // It tells Mongoose: "One interview can only ever have ONE report." If a glitch happens on the frontend and the user accidentally submits their interview twice, 
+    // the database will aggressively block the second attempt, preventing duplicate reports and keeping your data perfectly clean.
     unique: true,
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
+    // his ID belongs specifically to a document inside the User collection."
+    // When you call .populate(), Mongoose looks at the ref to know exactly which database collection it needs to run over to in order to fetch the rest of the data.
     required: true,
   },
   overallScore: {

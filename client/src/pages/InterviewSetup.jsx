@@ -46,10 +46,13 @@ const DIFFICULTIES = [
 ];
 
 const InterviewSetup = () => {
+  // 
   const navigate = useNavigate();
   const location = useLocation();
-
+ // we have used here if the user clicks the quick start then it will be It grabs location.state.role(role) and location.state.difficulty(dififlculty) and automatically pre-fills the settings.
+ // by default no such role is sleetced 
   const [selectedRole, setSelectedRole] = useState(location.state?.role || '');
+  // by default there is medium difficlulty is sleected
   const [selectedDifficulty, setSelectedDifficulty] = useState(location.state?.difficulty || 'Medium');
   const [questionCount, setQuestionCount] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -67,7 +70,13 @@ const InterviewSetup = () => {
         difficulty: selectedDifficulty,
         totalQuestions: questionCount,
       });
-      toast.success('Interview started! Good luck! 🎯');
+      toast.success('Interview started! Good luck!');
+      // this is the most important thing 
+      // I used the second argument of navigate to update the URL while simultaneously passing the API response directly in memory using React Router state. This is a deliberate performance optimization. 
+      // Instead of sending the user to a new page and forcing it to make a redundant GET request, 
+      // I hand the data directly to the next component so it can mount and render instantly without a loading screen. 
+      // To make the app robust, I set up a fallback on the receiving end: if the user refreshes the page and clears that router state, 
+      // it gracefully falls back to fetching the data using the ID from the URL
       navigate(`/interview/${res.data.interview._id}`, {
         state: { interview: res.data.interview },
       });

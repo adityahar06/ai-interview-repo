@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -74,7 +74,7 @@ server.listen(PORT, () => {
   console.log(`\n🚀 Server running on http://localhost:${PORT}`);
   console.log(`📱 Client URL: ${process.env.CLIENT_URL}`);
   console.log(`🗄️  MongoDB URI: ${process.env.MONGODB_URI}`);
-  console.log(`🤖 Gemini AI: Ready\n`);
+  console.log(`🤖 OpenRouter AI: Ready\n`);
 });
 
 module.exports = { app, io };

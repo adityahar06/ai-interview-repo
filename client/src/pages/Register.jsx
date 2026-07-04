@@ -16,10 +16,12 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // checks that any of this is not empty
     if (!form.name || !form.email || !form.password) {
       toast.error('Please fill in all fields');
       return;
     }
+    // Ensures password and confirmPassword are identical.
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -31,6 +33,9 @@ const Register = () => {
 
     setLoading(true);
     try {
+      // When the server successfully creates the user, it sends back a JWT token and the user's data. You feed this directly into your global login() function. This logs the user in instantly,
+      //  meaning they don't have to navigate to the login page and re-type their credentials.
+      // it skips the logic pnage by storing the jwt token in the local storage 
       const res = await authAPI.register({
         name: form.name,
         email: form.email,
@@ -47,10 +52,12 @@ const Register = () => {
   };
 
   const passwordStrength = () => {
-    const p = form.password;
+    const p = form.password;c
+    // this fucniton is used nust to check whther the password is weak,strong or not
     if (!p) return { strength: 0, label: '', color: '' };
     if (p.length < 6) return { strength: 1, label: 'Weak', color: 'bg-red-500' };
     if (p.length < 10) return { strength: 2, label: 'Fair', color: 'bg-amber-500' };
+    // if it is strong it should pass this regex
     if (/[A-Z]/.test(p) && /[0-9]/.test(p)) return { strength: 4, label: 'Strong', color: 'bg-emerald-500' };
     return { strength: 3, label: 'Good', color: 'bg-primary-500' };
   };
