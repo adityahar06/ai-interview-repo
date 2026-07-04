@@ -52,7 +52,7 @@ const Register = () => {
   };
 
   const passwordStrength = () => {
-    const p = form.password;c
+    const p = form.password;
     // this fucniton is used nust to check whther the password is weak,strong or not
     if (!p) return { strength: 0, label: '', color: '' };
     if (p.length < 6) return { strength: 1, label: 'Weak', color: 'bg-red-500' };
