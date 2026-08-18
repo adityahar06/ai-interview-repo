@@ -30,7 +30,6 @@ const Register = () => {
       toast.error('Password must be at least 6 characters');
       return;
     }
-
     setLoading(true);
     try {
       // When the server successfully creates the user, it sends back a JWT token and the user's data. You feed this directly into your global login() function. This logs the user in instantly,

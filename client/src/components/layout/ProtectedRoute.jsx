@@ -4,7 +4,8 @@ import { Brain } from 'lucide-react';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
+// this is just used for the dashboard if the user exists in th elocal storage and use auth fid it then first it will take some time
+// and open then dashboard page.else it will redirect to the login page
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">

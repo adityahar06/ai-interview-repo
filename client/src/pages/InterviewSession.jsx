@@ -34,6 +34,10 @@ const InterviewSession = () => {
     // Without this check, the app would try to submit the answer twice, crashing the server. 
     // This line says: "If the app is already in the middle of submitting, ignore the alarm
     if (!submitting) {
+      //When you use a standard alert(), it physically stops JavaScript from executing. The entire 
+      // web page freezes, the user cannot click anything, and the timer might even stop updating 
+      // until the user clicks "OK". A Toast appears smoothly in the background while the rest of 
+      // the application continues to run perfectly.
       toast(' Time up! Auto-submitting...', { icon: '⏱️' });
       handleSubmitAnswer(true, elapsed);
     }
@@ -69,32 +73,50 @@ const InterviewSession = () => {
     if (textareaRef.current) textareaRef.current.focus();
   }, [currentQuestion]);
 
-
+// If you just call handleSubmitAnswer(), it assumes the user actually typed an answer. But if they 
+// click a "Skip" button, you can call handleSubmitAnswer(true) to flag it as skipped.
+//elapsed = timer.elapsed: This hooks right into the custom timer you built earlier! If you don't pass a specific time,
+//  it automatically grabs the exact seconds passed from your timer hook.
   const handleSubmitAnswer = async (skipped = false, elapsed = timer.elapsed) => {
+    // This line says: "If we are ALREADY submitting, or if the whole interview is finishing, stop right here and do nothing."
     if (submitting || isCompleting) return;
+    // It likely turns your "Submit" button grey and changes the text to a spinning "Loading..." icon.
     setSubmitting(true);
+    // This calls the exact pause function we looked at in your custom timer hook! It immediately stops the clock so the user 
+    // isn't penalized for the time it takes the internet to send the message.
     timer.pause();
 
     try {
       const res = await interviewAPI.submitAnswer({
         interviewId: id,
+        // This uses a clever Ternary Operator (? :). It says: "If they skipped, send an empty string. Otherwise, send their answer but use .trim() to cut off any accidental blank spaces they typed at the beginning or end."
         answer: skipped ? '' : answer.trim(),
+
         timeTaken: elapsed,
+        //A true/false flag so the backend knows what happened.
         skipped,
       });
-
+// ou save the AI's feedback into React's memory.
       setLastFeedback(res.data.questionFeedback);
+  // This triggers a popup or a section on the screen to appear, showing the user exactly what the AI thought of their answer.
       setShowFeedback(true);
+      //This completely erases the text box where the user typed their answer. It acts as a clean slate so they are ready for the next question.
       setAnswer('');
 
       if (res.data.isLastQuestion) {
         // Complete interview
+        // This is a brilliant UX decision. Remember in the last block where you showed the AI's feedback on the screen? If you
+        //  instantly changed the page, the user wouldn't have time to read it! This pauses the app for 3
+        //  seconds so they can read the feedback before the page changes.
         setTimeout(async () => {
           setIsCompleting(true);
           setShowFeedback(false);
           try {
+            // It makes one final API call (interviewAPI.complete) to tell the backend to calculate the final score.
             const completeRes = await interviewAPI.complete({ interviewId: id });
+        
             toast.success('Interview complete! Generating your report...');
+            // is a pro-level React Router feature. Instead of putting the secret reportId in the URL (where the user could mess with it), it secretly passes it in the background memory to the results page!
             navigate(`/results/${id}`, { state: { reportId: completeRes.data.reportId } });
           } catch {
             toast.error('Failed to generate report');
@@ -102,11 +124,17 @@ const InterviewSession = () => {
           }
         }, 3000);
       } else {
+        // if not the last question
         setTimeout(() => {
+          // it waits 3 seconds (3000ms) so the user can read the feedback for their last answer.
+          // replaces the old question with the new question
           setCurrentQuestion(res.data.nextQuestion.question);
           setQuestionNumber(res.data.nextQuestion.questionNumber);
           setShowFeedback(false);
           timer.reset(120);
+          //This is a very clever bug-fix! It waits a tiny fraction of a second (100 milliseconds) before starting the timer
+          // . This ensures React has completely finished drawing the new question on the screen before the 
+          // clock starts ticking down.
           setTimeout(() => timer.start(), 100);
           setSubmitting(false);
         }, 3000);
@@ -117,7 +145,8 @@ const InterviewSession = () => {
       timer.start();
     }
   };
-
+// Because if you are currently looking at Question 3 out of 5, you haven't finished it yet! You have only completed 2 questions.
+// (3 - 1) / 5 = 0.4. Multiply by 100, and your progress bar is exactly 40% full.
   const progress = ((questionNumber - 1) / totalQuestions) * 100;
 
   if (!currentQuestion && !interview) {

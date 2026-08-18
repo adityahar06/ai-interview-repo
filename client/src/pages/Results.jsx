@@ -43,10 +43,20 @@ const Results = () => {
     const fetchReport = async () => {
       try {
         // Try to find the report for this interview ID or use the passed reportId
+        // in the URL we are sedning the interview ID and also a report id 
         let res;
+        // so if the report id is there  then just get the exact report form the database
         if (reportId) {
           res = await reportAPI.getById(reportId);
-        } else {
+          
+        }
+        // if by mistake the user refreshes the report page the rpeort id will be lost then we do else part
+        // now we will chekc all the report in the database and check the report id  with the 
+        // I wrote this condition to be resilient against backend serialization changes. In MongoDB/Mongoose architectures, relational fields like interviewId 
+        // can be sent to the client either as raw string ObjectIds or as fully populated objects, depending on the backend query. 
+        // By checking r.interviewId?._id === id || r.interviewId === id, my frontend gracefully handles both scenarios. 
+        // It prevents the UI from breaking if the backend team decides to add or remove a .populate() call on that endpoint in the future. 
+        else {
           // Fallback: get all reports and find one for this interview
           const allRes = await reportAPI.getAll();
           const found = allRes.data.reports.find(r => r.interviewId?._id === id || r.interviewId === id);
@@ -62,6 +72,10 @@ const Results = () => {
       }
     };
     fetchReport();
+    // this is a important part we use this that if the user is on an report page seeing interview A page
+    // now when user clicks and chnages the link then if we dont use this react would say taht i have fetched once 
+    // then it would be stuck in previous interview only and then 
+    // we sue this if any of this chnages re run this whole process again
   }, [id, reportId]);
 
   if (loading) {
@@ -79,13 +93,20 @@ const Results = () => {
       </div>
     );
   }
-
+//When you first navigate to the results page, the frontend might take a fraction of a second to download
+//  the report from the backend. If React tries to read report.grade before the report actually
+//  exists, the entire app will crash with a massive red error.
+// "If the report hasn't arrived yet, return null (draw a blank screen) and stop executing the rest of this code."
   if (!report) return null;
-
+//Your backend probably just sends back a simple string, like grade: "A" or recommendation: "Hire". But your UI needs to know what color to make that grade (e.g., Green for A, Red for F).
   const gc = gradeConfig[report.grade] || gradeConfig['C'];
+  // What if the AI bugs out and sends a grade of "Z", which doesn't exist? Instead of crashing the app, the || (OR) operator provides a safe default. It says: "If you can't find their exact grade, just use the styles for a 'C' to be safe
   const rc = recommendationConfig[report.recommendation] || recommendationConfig['Consider'];
+  //This simply plucks the specific interviewId out of the giant report object and saves it in a short, easy-to-type variable. You might use this later to display the ID on the screen or use it as a key.
   const interview = report.interviewId;
-
+// If you are using a charting library (like Recharts or Chart.js) to show a bar graph of the user's performance, those libraries are very strict. They demand data to be formatted in a specific way.
+// acts as a translator. It loops through every single question (q) and its index number (i).
+//Because arrays in JavaScript start counting at 0, it uses i + 1. This ensures the chart labels the bars as "Q1, Q2, Q3" instead of "Q0, Q1, Q2".
   const chartData = report.questionBreakdown.map((q, i) => ({
     name: `Q${i + 1}`,
     score: q.score,

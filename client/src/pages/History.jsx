@@ -8,17 +8,26 @@ import toast from 'react-hot-toast';
 const History = () => {
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  // this filter is different
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
-
+// using empty array 
   useEffect(() => {
     interviewAPI.getHistory()
       .then(res => setInterviews(res.data.interviews || []))
       .catch(() => toast.error('Failed to load history'))
       .finally(() => setLoading(false));
   }, []);
-
+// we use filter as there will be many interviews so we have ot check each interview one by one 
+// th condiotna are first we will se
+//Did the user select 'all'?" If yes, this checkpoint automatically passes (true).
+//If they didn't select 'all', it asks: "Does this specific interview's status match what they selected?" 
+// (For example, if they selected "completed", is iv.status actually "completed"?) If yes, it passes.
+// 2nd conditon
+// if user types the role as FRONT then we will first lower case all letters if they are not
+// and then we will be doing that like if front now the mongo db will see if front is any substirg usin g
+// includes funtion if they both matches then will return 
   const filtered = interviews.filter(iv => {
     const matchFilter = filter === 'all' || iv.status === filter;
     const matchSearch = iv.role.toLowerCase().includes(search.toLowerCase());

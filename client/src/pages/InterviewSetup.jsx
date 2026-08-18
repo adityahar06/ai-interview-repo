@@ -77,6 +77,12 @@ const InterviewSetup = () => {
       // I hand the data directly to the next component so it can mount and render instantly without a loading screen. 
       // To make the app robust, I set up a fallback on the receiving end: if the user refreshes the page and clears that router state, 
       // it gracefully falls back to fetching the data using the ID from the URL
+      // User clicks Start: You run setLoading(true). The button turns into a spinner. The user is stuck on the Setup page.
+      //The Backend Thinks: The await pauses the code while the server generates the questions.
+      // The Data Arrives: The server sends back the bag of questions (res.data.interview).
+      // The Page Turn: navigate fires. It changes the URL, rips down the Setup screen, draws the Interview Room, and hands it the bag of questions.
+      // The exact microsecond that document is born, MongoDB automatically stamps it with a brand new,
+      //  never-before-seen _id (like 64c12b7a...). You don't even have to write code to do this; MongoDB does it automatically by default.
       navigate(`/interview/${res.data.interview._id}`, {
         state: { interview: res.data.interview },
       });

@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 
+// I separated Reports and Interviews primarily because of Access Patterns. On the History dashboard, 
+// the user only needs a lightweight list of their interviews (roles, dates, status). 
+// If I embedded the massive AI report data inside the interview document, the database would 
+// have to pull a lot of unnecessary, heavy data just to render a simple list. By separating them,
+//  fetching the history list is very fast, and we only .populate() or fetch the Report when the user actually 
+// clicks into the specific Results page
 const reportSchema = new mongoose.Schema({
   interviewId: {
     type: mongoose.Schema.Types.ObjectId,

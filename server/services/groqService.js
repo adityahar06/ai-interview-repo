@@ -180,16 +180,29 @@ const getFallbackQuestions = (role) => {
   return [...questions].sort(() => Math.random() - 0.5);
 };
 
-
+// this checks your server's environment variables. If you forgot to set up your API key (or if you're running it locally without one), this evaluates to true.
+// It calls the fallback function (which likely contains the shuffle logic from your previous question) and uses 
+// .slice(0, count) to chop the array down so it returns exactly the number of questions requested, 
+// rather than the whole bank.
 const generateInterviewQuestions = async (role, difficulty, count) => {
   if (!process.env.GROQ_API_KEY) {
-      console.log('⚠️ GROQ_API_KEY missing, using fallback questions');
+      console.log(' GROQ_API_KEY missing, using fallback questions');
       return getFallbackQuestions(role).slice(0, count);
   }
-
+// It tries to find the specific list of topics for the requested role (e.g., "Backend Developer") inside the TOPIC_POOLS object.
+// The || (OR): If that specific role doesn't exist in your object, it safely falls back to the default "General Software Engineer" list so the app doesn't crash.
   const pool = TOPIC_POOLS[role] || TOPIC_POOLS['General Software Engineer'];
+// this creates a shallow copy of the array using the spread operator (...), and then applies the quick-and-dirty Math.random() - 0.5 sorting trick.
+// You now have a disposable, randomized version of the topic list, while your original TOPIC_POOLS data remains untouched.
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
+// If a user asks for 10 questions, but the topic pool for that specific role only has 5 total topics, Math.min(10, 5) returns 5. 
+// This ensures the .slice() method doesn't try to grab items that don't exist, which could cause
+//  undefined errors later.
   const selectedTopics = shuffled.slice(0, Math.min(count, shuffled.length));
+// It takes the array of chosen topics (e.g., ['React', 'CSS', 'Redux']) and transforms it into a single, highly readable string block.
+// This loops through the array. t represents the topic name, and i represents its index (which starts at 0).
+// ${i + 1}. ${t} formats each item into a numbered string. Because index starts at 0, adding 1 makes it human-readable.
+// .join('\n'): This takes that newly formatted array and stitches it together into one giant text string, putting a newline character (\n) between each item.
   const topicList = selectedTopics.map((t, i) => `${i + 1}. ${t}`).join('\n');
 
   const prompt = `You are a senior interviewer at a top tech company. Conduct a ${difficulty}-level ${role} interview.
@@ -207,27 +220,43 @@ Rules:
 
 Return ONLY a valid JSON object with a single key "questions" containing an array of exactly ${count} strings. Nothing else.
 {"questions": ["Question 1?", "Question 2?", ...]} `;
-
+// Wraps the entire process. If anything goes wrong (the API is down, the internet drops, 
+// the AI returns garbage), execution immediately jumps to the catch block at the bottom.
   try {
+    // Sends the prompt we built earlier to the Groq AI model and waits for the response.
     const chatCompletion = await groq.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
         model: MODEL,
+//Controls the AI's creativity. A scale from 0 to 1. 0 is robotic and deterministic, while 0.9 encourages creative, highly varied interview questions.
         temperature: 0.9,
+        // this tells to return the A strict instruction telling the AI engine, "Only return JSON."
         response_format: { type: 'json_object' },
     });
-    
+// Safely digs into the AI's response payload. If any part of that object structure is missing, it won't crash; it will just fall back to an empty string "".
     let text = chatCompletion.choices[0]?.message?.content || "";
     // Groq sometimes wraps JSON in markdown blocks, even when told not to.
+    // Uses Regular Expressions (Regex) to strip out markdown wrappers like ```json and ``` that the AI might have added.
+    // Removes any accidental blank spaces or newlines at the very beginning or end of the text.
     text = text.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
-    
+  // If the AI replied, "Sure, here are your questions: { "questions": [...] } Good luck!", 
+  // this Regex ignores the conversational text and extracts only everything from the first { to the last }. 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // If it finds no curly braces, it throws a custom error, which triggers the catch block.
     if (!jsonMatch) throw new Error('No JSON object in response');
-
+// Converts the cleaned text string into a real JavaScript object, and extracts the questions array. If the array doesn't exist, it defaults to an empty array [].
     let parsed = JSON.parse(jsonMatch[0]);
     let questions = parsed.questions || [];
-
+// Loops through the items, ensuring they are actually strings and trimming stray spaces.
     questions = questions
+    // he .map() method loops through every item in the questions array and transforms it based on the rule you provide.
+    //This is defensive programming. Just in case the AI glitched and returned a number (1) or an object ({ text: "..." }) instead of a sentence, this checks the data type.
+    // If it is a string, .trim() strips away any accidental blank spaces or invisible newline characters from the beginning and end of the text. (e.g., "  What is React? " becomes "What is React?"
+    // If it is not a string, it replaces the bad data with an empty string.
       .map(q => (typeof q === 'string' ? q.trim() : ''))
+      // The .filter() method loops through the cleaned array. It only keeps the items that return true for the conditions inside. It uses three arguments: q (the question text), i (its current position/index), and arr (the whole array).
+      // If the .map step replaced bad data with an empty string "" (0 characters), it gets deleted here.
+       // If the AI had a hallucination and just returned "?" or "React", it gets deleted because it is too short to be a real interview question.
+       //The indexOf() method scans the array from the beginning and returns the index of the very first time it sees that exact text.
       .filter((q, i, arr) => q.length > 15 && arr.indexOf(q) === i);
 
     if (questions.length < count) {
@@ -235,15 +264,16 @@ Return ONLY a valid JSON object with a single key "questions" containing an arra
       questions = [...questions, ...extras].slice(0, count);
     }
 
-    console.log(`✅ Generated ${questions.length} unique questions for [${role}] (${difficulty}) via Groq`);
+    console.log(` Generated ${questions.length} unique questions for [${role}] (${difficulty}) via Groq`);
     return questions.slice(0, count);
   } catch (err) {
     console.error('Groq generateQuestions error:', err.message);
-    console.log('⚠️  Using smart fallback questions');
+    console.log('  Using smart fallback questions');
     return getFallbackQuestions(role).slice(0, count);
   }
 };
-
+// Before even trying to talk to the AI, it checks if the user submitted an empty or incredibly short answer (less than 5 characters, like "idk" or "no").
+// Every API call costs money and takes a few seconds. If the user didn't even try, there is no need to make the AI grade it. It instantly returns a 0 and hands back encouraging feedback.
 const evaluateAnswer = async (role, difficulty, question, answer) => {
   if (!answer || answer.trim().length < 5) {
     return {
@@ -251,7 +281,7 @@ const evaluateAnswer = async (role, difficulty, question, answer) => {
       feedback: 'No meaningful answer was provided. Always attempt an answer — partial answers earn partial credit!',
     };
   }
-
+// ust like the generation function, if the API key is missing, it gracefully skips the AI and returns a neutral score of 5 so the app doesn't crash.
   if (!process.env.GROQ_API_KEY) {
       return {
           score: 5,
@@ -279,6 +309,7 @@ Respond with ONLY this JSON (no markdown, no extra text):
     const chatCompletion = await groq.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
         model: MODEL,
+        // A lower temperature (closer to 0) reduces the AI's creativity, making it a much better, more reliable judge.
         temperature: 0.3,
         response_format: { type: 'json_object' },
     });
@@ -290,6 +321,11 @@ Respond with ONLY this JSON (no markdown, no extra text):
     if (!jsonMatch) throw new Error('No JSON found');
 
     const evaluation = JSON.parse(jsonMatch[0]);
+    // Because you cannot 100% trust the AI, this line guarantees the score will always be a clean integer between 0 and 10.
+    // Number(...) || 5: Converts the AI's score to a number. If it fails (e.g., the AI returned "eight" instead of 8), it defaults to 5.
+    // Math.round(...): Forces it to be a whole number (e.g., changes 7.5 to 8).
+    // Math.max(0, Math.min(10, ...)): This restricts the number. If the AI hallucinates and gives
+    //  the user a 15, Math.min forces it down to 10. If it gives a -2, Math.max forces it up to 0.
     return {
       score: Math.max(0, Math.min(10, Math.round(Number(evaluation.score) || 5))),
       feedback: evaluation.feedback || 'Answer evaluated.',
@@ -306,9 +342,12 @@ Respond with ONLY this JSON (no markdown, no extra text):
 
 const generateReport = async (role, difficulty, questions) => {
   const qaText = questions
+  // Loops through the array of question objects and formats each one into a readable text block.
     .map((q, i) =>
+      // If the user skipped the question and q.answer is empty, this safely injects "Not answered" instead of null or undefined.
       `Q${i + 1}: ${q.question}\nAnswer: ${q.answer || 'Not answered'}\nScore: ${q.score ?? 0}/10`
     )
+    // Stitches the array of formatted blocks together with double line breaks for readability.
     .join('\n\n');
 
   const avgScore = questions.reduce((s, q) => s + (q.score || 0), 0) / questions.length;
@@ -351,6 +390,9 @@ Write a professional candidate assessment. Return ONLY this JSON (no markdown):
     if (!jsonMatch) throw new Error('No JSON found');
 
     return JSON.parse(jsonMatch[0]);
+    // This code acts as a safety net. If your main AI call fails, instead of throwing an error or
+    //  sending undefined back to your frontend, this block catches the failure and instantly 
+    // constructs a clean, standardized report using basic logic and template strings.
   } catch (err) {
     console.error('Groq generateReport error:', err.message);
     const level = avgScore >= 7 ? 'strong' : avgScore >= 5 ? 'moderate' : 'beginner-level';

@@ -17,7 +17,7 @@ const startInterview = async (req, res, next) => {
    // if user writes some string whic hwill be converted to the number  and if user doesn't give then by default 5 questions will be taken for max then 
    // it will be compare and max will be taken out of userinput if given or 5  and 3
    // then the minimum of 15 and the max will be consider as no of uestions
-   // we do this to restrict the nof questions as users should get atleast answer 5 questoins to look like an interview
+   // we do this to restrict the nof questions as users should get atleast answer 3 questoins to look like an interview
     const count = Math.min(Math.max(parseInt(totalQuestions) || 5, 3), 15);
    
     // Generate questions using Gemini AI
@@ -31,7 +31,6 @@ const startInterview = async (req, res, next) => {
     // q=> it is an arrwo fucnoin it tells that take the current item and call it q
     //
     const questions = questionTexts.map(q => ({ question: q }));
-
     const interview = await Interview.create({
       userId: req.user._id,
       role,
@@ -41,7 +40,6 @@ const startInterview = async (req, res, next) => {
       status: 'active',
       startedAt: new Date(),
     });
-
     res.status(201).json({
       success: true,
       interview: {
@@ -148,22 +146,18 @@ const completeInterview = async (req, res, next) => {
     if (!interview) {
       return res.status(404).json({ success: false, message: 'Interview not found' });
     }
-
     // Force complete if not already
     if (interview.status !== 'completed') {
       interview.status = 'completed';
       interview.completedAt = new Date();
       await interview.save();
     }
-
     // Check if report already exists
-    // if by mistake the user submits twice the interview then chekc if taht interview exists or not if exists retun the score
-    
+    // if by mistake the user submits twice the interview then chekc if taht interview exists or not if exists retun the score 
     const existingReport = await Report.findOne({ interviewId });
     if (existingReport) {
       return res.json({ success: true, reportId: existingReport._id });
     }
-
     // Calculate overall score
     // first the .filetr( )will remove all questions  taht are skipped skip that 
     const scoredQuestions = interview.questions.filter(q => q.score !== null);
@@ -181,7 +175,6 @@ const completeInterview = async (req, res, next) => {
     const overallScore = scoredQuestions.length > 0
       ? scoredQuestions.reduce((sum, q) => sum + q.score, 0) / scoredQuestions.length
       : 0;
-
     interview.overallScore = parseFloat(overallScore.toFixed(1));
     await interview.save();
 
@@ -222,36 +215,47 @@ const completeInterview = async (req, res, next) => {
 };
 
 // Helper function to auto-complete abandoned interviews
+// he function accepts a userId, meaning it probably runs every time a user logs into their dashboard to clean up their specific mess.
 const autoCompleteAbandonedInterviews = async (userId) => {
   try {
+    // It takes the exact time right now (Date.now()), subtracts 2 hours, and saves that exact timestamp.
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     
     const abandonedInterviews = await Interview.find({
       userId,
+      // The interview was never finished or submitted.
       status: 'active',
+      // his is a special MongoDB operator. $lt stands for Less Than. It tells the database: "
+      // Find interviews where the start time is LESS THAN (older than) the two-hour cutoff we 
+      // just calculated."
       startedAt: { $lt: twoHoursAgo }
     });
 
     for (const interview of abandonedInterviews) {
+      // loops through all the abondone interviews
+      // It sets their totalScore to 0
       let totalScore = 0;
-      
+      // if (q.score !== null): It checks if the question actually has a score. (If the user abandoned the test on Question 3, Questions 4 and 5 will likely have a score of null). If a score exists, it adds it to the totalScore.
       interview.questions.forEach(q => {
         if (q.score !== null) {
           totalScore += q.score;
         }
       });
-
+// t makes sure the test actually had questions. (In programming, dividing by zero causes massive errors).
+// If the score is 3.3333333, this chops it down to just one decimal point (3.3).
+//actually turns the number into a string (text). parseFloat turns it back into a true number so the database accepts it properly.
       const overallScore = interview.totalQuestions > 0 
         ? parseFloat((totalScore / interview.totalQuestions).toFixed(1))
         : 0;
-
+// It changes the status from 'active' to 'completed', stamps it with the exact date/time it was closed, assigns the calculated score, and saves the updated document back to the MongoDB database.
       interview.status = 'completed';
       interview.completedAt = new Date();
       interview.overallScore = overallScore;
       
       await interview.save();
-
+// It first checks if a report somehow already exists (findOne).
       const existingReport = await Report.findOne({ interviewId: interview._id });
+// If not, it uses Report.create to generate a hardcoded "Penalty Report." It gives them a generic summary explaining why their score is so low.
       if (!existingReport) {
         await Report.create({
           interviewId: interview._id,
@@ -260,6 +264,7 @@ const autoCompleteAbandonedInterviews = async (userId) => {
           summary: "This interview was abandoned midway. The score is calculated based on completed answers, with unanswered questions counting as 0.",
           strengths: ["Started the interview"],
           improvements: ["Complete all questions in future interviews"],
+          // It loops (.map) through the questions. For any question they skipped, the || (OR) operator kicks in. It assigns a score of 0 and a default feedback string: "Question was not answered." This ensures the Results Page chart you showed me earlier won't crash when trying to draw the graph!
           questionBreakdown: interview.questions.map(q => ({
             question: q.question,
             score: q.score || 0,
@@ -268,6 +273,8 @@ const autoCompleteAbandonedInterviews = async (userId) => {
         });
         
         const user = await User.findById(userId);
+        // instead of looping through every interview they have ever taken to calculate a new average (which would be slow and expensive), it uses a Weighted Moving Average formula.
+// It multiplies their old average by their old total to get their lifetime total points. Then it adds this new overallScore, and divides by the new total number of interviews.
         if (user) {
           const totalInterviews = user.totalInterviews + 1;
           const newAvg = ((user.averageScore * user.totalInterviews) + overallScore) / totalInterviews;
@@ -287,11 +294,16 @@ const autoCompleteAbandonedInterviews = async (userId) => {
 const getHistory = async (req, res, next) => {
   try {
     // Clean up any abandoned interviews before fetching history
+    // old on, let me quickly check if you left any interviews running. If you did, I'll close them and grade them right now
     await autoCompleteAbandonedInterviews(req.user._id);
 
     const interviews = await Interview.find({ userId: req.user._id })
+    // t grabs all interviews belonging to the logged-in user.
+    // It puts the newest, most recent interviews at the very top of the list, which is exactly what a user expects to see.
       .sort({ createdAt: -1 })
+      // to only select this items
       .select('role difficulty status overallScore totalQuestions startedAt completedAt createdAt')
+      // It stops grabbing data after 20 results. If a user has done 500 interviews, pulling all of them at once would crash the browser.
       .limit(20);
 
     res.json({ success: true, interviews });
