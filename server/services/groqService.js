@@ -2,7 +2,7 @@ const Groq = require('groq-sdk');
 
 // Ensure you have GROQ_API_KEY set in your .env
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = 'qwen3.6-27b'; // Transitioned to recommended replacement model
+const MODEL = 'gpt-oss-120b'; 
 
 // ──────────────────────────────────────────────
 // Topic pools — ensures each question covers a DIFFERENT concept
