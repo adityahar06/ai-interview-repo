@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 // what is JWT?
 //a compact, URL-safe way to securely transmit information between a client (like a browser) and a server as a JSON object
-//WT = JSON Web Token. Three parts separated by dots:
+//JWT = JSON Web Token. Three parts separated by dots:
 //Header — algorithm used (HS256)Specifies the token type (JWT) and the hashing algorithm used (e.g., HMAC SHA256)
 //Payload — data stored ({ id: "user_mongodb_id" })Contains the "claims" or data about the user (e.g., user ID, name, or roles). Warning: This data is only encoded, not encrypted. Anyone can read it, so never put passwords or sensitive data here
 //Signature — Header + Payload signed with JWT_SECRET. Created by taking the encoded header, encoded payload, and combining them with a secret key known only to the server. This ensures the token cannot be tampered with.
@@ -87,6 +87,7 @@ const login = async (req, res, next) => {
     next(error);
   }
 };
+
 
 // @desc  Get current user
 // @route GET /api/auth/me

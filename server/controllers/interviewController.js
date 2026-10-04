@@ -314,6 +314,7 @@ const getHistory = async (req, res, next) => {
 
 // @desc  Get single interview
 // @route GET /api/interview/:id
+// like whenevr the user refreshes the web page of the interview then it will get the interview from the database and show it to the user
 const getInterview = async (req, res, next) => {
   try {
     const interview = await Interview.findOne({ _id: req.params.id, userId: req.user._id });

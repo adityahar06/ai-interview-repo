@@ -46,6 +46,12 @@ const userSchema = new mongoose.Schema({
 //By using pre('save'), you are utilizing Mongoose middleware. 
 // You are intercepting the user's data right before it gets written to the database. \
 // Inside this hook, you use bcrypt to mathematically scramble (hash) the password
+//A user's password and how it gets mathematically hashed is strictly the responsibility of the User entity. The authController shouldn't need to import bcrypt or know how the hashing algorithm works under the hood. 
+// The controller's only job is to handle the HTTP request, ask the User model 'Does this password
+//  match?', and send a response.
+//By attaching it to userSchema.methods, I keep my codebase extremely clean. If I ever need to verify a user's password from a completely different controller—like a 
+// 'Delete Account' route or a 'Change Password' route—I don't have to duplicate the bcrypt logic.
+//  I just call user.comparePassword().
 userSchema.pre('save', async function (next) {
   //I use isModified('password') in my pre-save hook to act as a safeguard. It ensures that the expensive and 
   // destructive bcrypt hashing function only runs when a user is explicitly creating or 

@@ -102,7 +102,6 @@ const InterviewSession = () => {
       setShowFeedback(true);
       //This completely erases the text box where the user typed their answer. It acts as a clean slate so they are ready for the next question.
       setAnswer('');
-
       if (res.data.isLastQuestion) {
         // Complete interview
         // This is a brilliant UX decision. Remember in the last block where you showed the AI's feedback on the screen? If you
@@ -114,7 +113,6 @@ const InterviewSession = () => {
           try {
             // It makes one final API call (interviewAPI.complete) to tell the backend to calculate the final score.
             const completeRes = await interviewAPI.complete({ interviewId: id });
-        
             toast.success('Interview complete! Generating your report...');
             // is a pro-level React Router feature. Instead of putting the secret reportId in the URL (where the user could mess with it), it secretly passes it in the background memory to the results page!
             navigate(`/results/${id}`, { state: { reportId: completeRes.data.reportId } });
