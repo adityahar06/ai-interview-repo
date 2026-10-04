@@ -404,4 +404,73 @@ Write a professional candidate assessment. Return ONLY this JSON (no markdown):
   }
 };
 
-module.exports = { generateInterviewQuestions, evaluateAnswer, generateReport };
+// ADDED: This function is called when a user uploads their resume.
+// Instead of using our fixed TOPIC_POOLS, we send the raw resume text directly to Groq
+// and ask it to study the candidate's actual projects and skills to generate custom questions.
+// This makes the interview feel truly personalized and far more realistic.
+const generateResumeQuestions = async (resumeText, difficulty, count) => {
+  // Safety check: if the API key is missing, fall back to general questions
+  if (!process.env.GROQ_API_KEY) {
+    console.log('GROQ_API_KEY missing, using fallback questions for resume interview');
+    return getFallbackQuestions('General Software Engineer').slice(0, count);
+  }
+
+  // We inject the user's resume text directly into the prompt.
+  // Groq will read it, identify their real projects and skills, and ask about those specifically.
+  const prompt = `You are a senior technical interviewer at a top tech company.
+  
+A candidate has submitted their resume. Read it carefully and generate exactly ${count} interview questions.
+
+Resume:
+"""
+${resumeText}
+"""
+
+Rules:
+- Extract the topics specifically from the "Skills" section OR read the "Project" overview section of this resume.
+- Generate and ask the questions from THERE ONLY. Do not invent topics that are not in the resume.
+- Ask deep, specific questions about their actual projects and listed skills (e.g. "In your X project, how did you handle Y?" or "How do you use [Skill] to solve [Problem]?").
+- Difficulty level: ${difficulty}
+- Sound like real FAANG interview questions
+
+Return ONLY a valid JSON object:
+{"questions": ["Question 1?", "Question 2?", ...]}`;
+
+  try {
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: MODEL,
+      // Higher temperature so questions feel varied and creative
+      temperature: 0.8,
+      response_format: { type: 'json_object' },
+    });
+
+    let text = chatCompletion.choices[0]?.message?.content || '';
+    // Same sanitization pipeline as generateInterviewQuestions — strip markdown wrappers
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in resume question response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    let questions = parsed.questions || [];
+    // Clean and filter — same defensive logic as the main question generator
+    questions = questions
+      .map(q => (typeof q === 'string' ? q.trim() : ''))
+      .filter((q, i, arr) => q.length > 15 && arr.indexOf(q) === i);
+
+    // If Groq returned fewer questions than requested, pad with fallback questions
+    if (questions.length < count) {
+      const extras = getFallbackQuestions('General Software Engineer');
+      questions = [...questions, ...extras].slice(0, count);
+    }
+
+    console.log(`Generated ${questions.length} resume-based questions via Groq`);
+    return questions.slice(0, count);
+  } catch (err) {
+    console.error('Groq generateResumeQuestions error:', err.message);
+    // If anything goes wrong, fall back gracefully to general questions so the app never crashes
+    return getFallbackQuestions('General Software Engineer').slice(0, count);
+  }
+};
+
+module.exports = { generateInterviewQuestions, evaluateAnswer, generateReport, generateResumeQuestions };

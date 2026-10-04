@@ -52,37 +52,33 @@ const InterviewSetup = () => {
  // we have used here if the user clicks the quick start then it will be It grabs location.state.role(role) and location.state.difficulty(dififlculty) and automatically pre-fills the settings.
  // by default no such role is sleetced 
   const [selectedRole, setSelectedRole] = useState(location.state?.role || '');
-  // by default there is medium difficlulty is sleected
   const [selectedDifficulty, setSelectedDifficulty] = useState(location.state?.difficulty || 'Medium');
   const [questionCount, setQuestionCount] = useState(5);
+  // ADDED: State to hold the selected resume file
+  const [resumeFile, setResumeFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleStart = async () => {
-    if (!selectedRole) {
-      toast.error('Please select a job role');
+    // UPDATED: Now requires EITHER a role OR a resume
+    if (!selectedRole && !resumeFile) {
+      toast.error('Please select a job role or upload a resume');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await interviewAPI.start({
-        role: selectedRole,
-        difficulty: selectedDifficulty,
-        totalQuestions: questionCount,
-      });
+      const formData = new FormData();
+      // UPDATED: If they uploaded a resume, we tell the backend the role is 'Resume Based'
+      formData.append('role', resumeFile ? 'Resume Based' : selectedRole);
+      formData.append('difficulty', selectedDifficulty);
+      formData.append('totalQuestions', questionCount);
+      if (resumeFile) {
+        formData.append('resume', resumeFile);
+      }
+
+      const res = await interviewAPI.start(formData);
+      
       toast.success('Interview started! Good luck!');
-      // this is the most important thing 
-      // I used the second argument of navigate to update the URL while simultaneously passing the API response directly in memory using React Router state. This is a deliberate performance optimization. 
-      // Instead of sending the user to a new page and forcing it to make a redundant GET request, 
-      // I hand the data directly to the next component so it can mount and render instantly without a loading screen. 
-      // To make the app robust, I set up a fallback on the receiving end: if the user refreshes the page and clears that router state, 
-      // it gracefully falls back to fetching the data using the ID from the URL
-      // User clicks Start: You run setLoading(true). The button turns into a spinner. The user is stuck on the Setup page.
-      //The Backend Thinks: The await pauses the code while the server generates the questions.
-      // The Data Arrives: The server sends back the bag of questions (res.data.interview).
-      // The Page Turn: navigate fires. It changes the URL, rips down the Setup screen, draws the Interview Room, and hands it the bag of questions.
-      // The exact microsecond that document is born, MongoDB automatically stamps it with a brand new,
-      //  never-before-seen _id (like 64c12b7a...). You don't even have to write code to do this; MongoDB does it automatically by default.
       navigate(`/interview/${res.data.interview._id}`, {
         state: { interview: res.data.interview },
       });
@@ -103,12 +99,12 @@ const InterviewSetup = () => {
             AI Interview Setup
           </div>
           <h1 className="text-4xl font-black text-white mb-3">Configure Your Interview</h1>
-          <p className="text-gray-400 text-lg">Choose your role, difficulty, and number of questions</p>
+          <p className="text-gray-400 text-lg">Choose a role OR upload your resume</p>
         </div>
 
         <div className="space-y-8 animate-slide-up">
           {/* Role Selection */}
-          <div className="glass-card p-6">
+          <div className={`glass-card p-6 transition-all duration-300 ${resumeFile ? 'opacity-40 grayscale' : ''}`}>
             <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-2">
               <span className="text-2xl">👔</span> Select Job Role
             </h2>
@@ -117,7 +113,10 @@ const InterviewSetup = () => {
                 <button
                   key={value}
                   id={`role-${value.replace(/\s+/g, '-').toLowerCase()}`}
-                  onClick={() => setSelectedRole(value)}
+                  onClick={() => { 
+                    setSelectedRole(value); 
+                    setResumeFile(null); // Clear resume if they pick a role
+                  }}
                   className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                     selectedRole === value
                       ? 'bg-primary-500/30 border-primary-500 shadow-lg shadow-primary-500/20'
@@ -135,6 +134,53 @@ const InterviewSetup = () => {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* ADDED: Optional Resume Upload */}
+          <div className={`glass-card p-6 transition-all duration-300 ${selectedRole ? 'opacity-40 grayscale' : 'ring-1 ring-primary-500/30 shadow-lg shadow-primary-500/10'}`}>
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <span className="text-2xl">📄</span> Or Upload Resume
+            </h2>
+            <p className="text-gray-400 text-sm mb-5">
+              Skip selecting a role. We will generate questions entirely based on your actual skills and projects.
+            </p>
+            <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors relative ${resumeFile ? 'border-primary-500 bg-primary-500/10' : 'border-white/20 hover:border-primary-500/50 bg-white/5'}`}>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setResumeFile(file);
+                    setSelectedRole(''); // Clear role if they upload a resume
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                title="Upload Resume"
+              />
+              {resumeFile ? (
+                <div className="flex flex-col items-center gap-2 text-emerald-400">
+                  <span className="text-3xl">✅</span>
+                  <p className="font-medium text-white">{resumeFile.name}</p>
+                  <button 
+                    className="relative z-20 text-xs text-red-400 hover:text-red-300 underline mt-1"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setResumeFile(null);
+                    }}
+                  >
+                    Remove File
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-3xl text-gray-400">📁</span>
+                  <p className="font-medium text-gray-300">Click or drag PDF here</p>
+                  <p className="text-xs text-gray-500">Max 5MB</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -190,12 +236,12 @@ const InterviewSetup = () => {
           </div>
 
           {/* Summary & Start */}
-          {selectedRole && (
+          {(selectedRole || resumeFile) && (
             <div className="glass-card bg-gradient-to-r from-primary-500/10 to-accent-purple/10 border-primary-500/30 p-6 animate-fade-in">
               <h3 className="text-white font-semibold mb-3">Interview Summary</h3>
               <div className="flex flex-wrap gap-3 mb-6">
                 <span className="bg-primary-500/20 border border-primary-500/30 text-primary-300 px-3 py-1 rounded-full text-sm">
-                  {ROLES.find(r => r.value === selectedRole)?.icon} {selectedRole}
+                  {resumeFile ? '📄 Custom (Resume Based)' : (ROLES.find(r => r.value === selectedRole)?.icon + ' ' + selectedRole)}
                 </span>
                 <span className="bg-white/10 border border-white/20 text-gray-300 px-3 py-1 rounded-full text-sm">
                   {selectedDifficulty} Difficulty

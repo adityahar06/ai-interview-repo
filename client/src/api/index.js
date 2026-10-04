@@ -67,6 +67,9 @@ export const authAPI = {
 
 // Interview
 export const interviewAPI = {
+  // ADDED: Axios handles FormData out-of-the-box. If data is a FormData instance,
+  // Axios automatically overrides our default application/json and sets it to multipart/form-data.
+  // We use this to send the resume PDF along with role and difficulty.
   start: (data) => API.post('/interview/start', data),
   submitAnswer: (data) => API.post('/interview/answer', data),
   complete: (data) => API.post('/interview/complete', data),

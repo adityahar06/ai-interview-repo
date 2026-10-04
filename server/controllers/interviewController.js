@@ -1,7 +1,30 @@
 const Interview = require('../models/Interview');
 const User = require('../models/User');
 const Report = require('../models/Report');
-const { generateInterviewQuestions, evaluateAnswer, generateReport } = require('../services/groqService');
+const { generateInterviewQuestions, evaluateAnswer, generateReport, generateResumeQuestions } = require('../services/groqService');
+// ADDED: multer handles receiving the file from the frontend form submission.
+// memoryStorage() keeps the PDF in RAM (as a Buffer) instead of saving it to disk —
+// this is cleaner for a cloud server like Render that has no persistent disk storage.
+const multer = require('multer');
+// ADDED: pdf-parse converts the raw PDF Buffer from multer into a plain text string
+// so we can inject it directly into the Groq prompt.
+const pdfParse = require('pdf-parse');
+
+// ADDED: Configure multer to only accept PDF files, reject everything else for security.
+// This middleware is attached to the /start route so the file is processed before startInterview runs.
+const resumeUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    // Only allow PDF files — reject images, docs, etc.
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  },
+  // ADDED: Limit file size to 5MB to prevent server abuse
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // @desc  Start a new interview
 // @route POST /api/interview/start
@@ -19,10 +42,34 @@ const startInterview = async (req, res, next) => {
    // then the minimum of 15 and the max will be consider as no of uestions
    // we do this to restrict the nof questions as users should get atleast answer 3 questoins to look like an interview
     const count = Math.min(Math.max(parseInt(totalQuestions) || 5, 3), 15);
-   
-    // Generate questions using Gemini AI
-    // this fucntion genertae interview question is in services folder
-    const questionTexts = await generateInterviewQuestions(role, difficulty, count);
+
+    // ADDED: Check if the user uploaded a resume PDF with their request.
+    // req.file is populated by the multer middleware when a file is attached.
+    // If no file was uploaded, resumeText stays empty and we fall back to normal topic-pool questions.
+    let resumeText = '';
+    if (req.file) {
+      try {
+        // ADDED: pdf-parse reads the PDF buffer from memory and extracts all the text content.
+        // We slice to 8000 characters to avoid hitting Groq's token limit with very large resumes.
+        const pdfData = await pdfParse(req.file.buffer);
+        resumeText = pdfData.text.slice(0, 8000);
+        console.log(`Resume uploaded: extracted ${resumeText.length} characters of text`);
+      } catch (pdfErr) {
+        // If PDF parsing fails, log the error but don't crash — just continue without resume
+        console.error('PDF parsing failed, continuing without resume:', pdfErr.message);
+      }
+    }
+
+    // ADDED: If resume text was successfully extracted, use the resume-based question generator.
+    // Otherwise, use the existing topic-pool generator exactly as before — zero breaking changes.
+    let questionTexts;
+    if (resumeText) {
+      questionTexts = await generateResumeQuestions(resumeText, difficulty, count);
+    } else {
+      // Generate questions using the existing topic pool (original behavior, unchanged)
+      questionTexts = await generateInterviewQuestions(role, difficulty, count);
+    }
+
     // this is importnat step
     // the question text which we get form above ststemnt AI 
     // now it maps like this . questions will be retirned in parenthessi as i have done{question1: what is node js}
@@ -39,6 +86,9 @@ const startInterview = async (req, res, next) => {
       questions,
       status: 'active',
       startedAt: new Date(),
+      // ADDED: Save the extracted resume text in the database so we always know
+      // which interviews were resume-based vs topic-pool-based
+      resumeText,
     });
     res.status(201).json({
       success: true,
@@ -327,4 +377,5 @@ const getInterview = async (req, res, next) => {
   }
 };
 
-module.exports = { startInterview, submitAnswer, completeInterview, getHistory, getInterview };
+// ADDED: Export resumeUpload so the interview route can use it as middleware on the /start endpoint
+module.exports = { startInterview, submitAnswer, completeInterview, getHistory, getInterview, resumeUpload };

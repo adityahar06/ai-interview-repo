@@ -30,6 +30,8 @@ const interviewSchema = new mongoose.Schema({
       'System Design',
       'Product Manager',
       'General Software Engineer',
+      // ADDED: Special role for when a user uploads a resume and skips selecting a traditional role
+      'Resume Based',
     ],
   },
   difficulty: {
@@ -63,6 +65,9 @@ const interviewSchema = new mongoose.Schema({
   },
   startedAt: { type: Date },
   completedAt: { type: Date },
+  // ADDED: Stores the raw text extracted from the user's uploaded resume PDF.
+  // This is optional — if no resume is uploaded, interview works as before using topic pools.
+  resumeText: { type: String, default: '' },
   // I enabled Mongoose's native timestamps to automatically track the createdAt and updatedAt 
   // lifecycle of my documents. This completely removes the need to manually manage 
   // date objects in my controllers, ensures my database has a reliable chronological audit trail, and makes it incredibly easy to sort data for the frontend dashboards
